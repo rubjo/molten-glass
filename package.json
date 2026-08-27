@@ -1,0 +1,60 @@
+{
+  "name": "molten-glass",
+  "version": "0.1.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "Plug-and-play WebGL molten / liquid glass effect for any DOM element.",
+  "author": "Rune B <victor.mono.font@gmail.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rubjo/molten-glass.git"
+  },
+  "homepage": "https://github.com/rubjo/molten-glass#readme",
+  "bugs": {
+    "url": "https://github.com/rubjo/molten-glass/issues"
+  },
+  "type": "module",
+  "main": "./src/index.js",
+  "module": "./src/index.js",
+  "types": "./types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./types/index.d.ts",
+      "import": "./src/index.js"
+    }
+  },
+  "files": [
+    "src",
+    "types",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "peerDependencies": {
+    "html2canvas": "^1.4.1"
+  },
+  "peerDependenciesMeta": {
+    "html2canvas": {
+      "optional": true
+    }
+  },
+  "scripts": {
+    "example": "npx --yes serve ."
+  },
+  "keywords": [
+    "webgl",
+    "glass",
+    "liquid-glass",
+    "molten-glass",
+    "glassmorphism",
+    "shader",
+    "ui",
+    "effect",
+    "frontend"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=16"
+  }
+}

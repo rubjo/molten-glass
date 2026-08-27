@@ -1,0 +1,298 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>molten-glass — interactive demo</title>
+    <!-- html2canvas is an optional peer dep of molten-glass; load it as a global for the demo. -->
+    <script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <style>
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        color: #fff;
+        font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+        /* Match the default (Indigo) theme so there's no flash before JS applies it. */
+        background: #1c1e33;
+      }
+
+      /* Rich scrolling content — this is what the fixed lens refracts. */
+      .content { max-width: 720px; margin: 0 auto; padding: 120px 40px 160px; }
+      .content section { margin-bottom: 90px; }
+      .content h1 { font-size: 56px; font-weight: 900; letter-spacing: -1.5px; line-height: 1.05; }
+      .content h2 { font-size: 30px; font-weight: 800; margin-bottom: 12px; color: #7ef0ff; }
+      .content p  { font-size: 18px; line-height: 1.7; color: rgba(255,255,255,0.82); margin-bottom: 14px; }
+      .swatches { display: flex; gap: 14px; margin-top: 20px; }
+      .swatches div { flex: 1; height: 120px; border-radius: 16px; }
+      /* Fallback matches the JS default (Indigo trio) by position, so no flash on load. */
+      .swatches div:nth-child(1) { background: linear-gradient(135deg,#5c6bc0,#3f4983); }
+      .swatches div:nth-child(2) { background: linear-gradient(135deg,#4fa2a6,#366e71); }
+      .swatches div:nth-child(3) { background: linear-gradient(135deg,#c78aa2,#875e6e); }
+
+      /* Control panel — marked data-molten-ignore so it isn't captured. */
+      .panel {
+        position: fixed; top: 20px; right: 20px; width: 290px;
+        background: rgba(15, 17, 26, 0.85);
+        border: 1px solid rgba(255,255,255,0.12);
+        border-radius: 20px; padding: 18px; z-index: 3000;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+        backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+        max-height: calc(100vh - 40px); overflow-y: auto;
+      }
+      .panel h3 { font-size: 13px; letter-spacing: 1px; text-transform: uppercase; color: #00f2fe; margin-bottom: 2px; }
+      .panel .sub { font-size: 11px; color: rgba(255,255,255,0.4); margin-bottom: 14px; }
+      .row { margin-bottom: 10px; display: flex; flex-direction: column; gap: 4px; }
+      .row label { font-size: 11px; color: rgba(255,255,255,0.6); display: flex; justify-content: space-between; }
+      .row input[type="range"] { width: 100%; accent-color: #00f2fe; cursor: pointer; }
+      .panel button {
+        width: 100%; margin-top: 8px; padding: 9px; border-radius: 10px;
+        border: 1px solid rgba(255,255,255,0.15); background: rgba(255,255,255,0.06);
+        color: #fff; font-size: 12px; cursor: pointer;
+      }
+      .panel button:hover { background: rgba(255,255,255,0.12); }
+      .panel h4 { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.45); margin: 14px 0 8px; }
+      .thumbs { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+      .thumbs button {
+        aspect-ratio: 1; border-radius: 8px; border: 2px solid transparent; padding: 0;
+        background-size: cover; background-position: center; cursor: pointer;
+      }
+      .thumbs button.active { border-color: #00f2fe; }
+      .file-btn {
+        display: block; text-align: center; margin-top: 8px; padding: 8px;
+        border-radius: 9px; border: 1px dashed rgba(255,255,255,0.25);
+        color: rgba(255,255,255,0.75); font-size: 11px; cursor: pointer;
+      }
+      .file-btn input { display: none; }
+
+      /* The FIXED, draggable lens. Content scrolls behind it; it refracts a snapshot. */
+      .lens {
+        position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+        width: 420px; height: 300px; border-radius: 48px; z-index: 1500;
+        border: 1px solid rgba(255,255,255,0.35);
+        box-shadow: 0 40px 90px rgba(0,0,0,0.55), inset 0 1px 1px rgba(255,255,255,0.35);
+        display: flex; align-items: flex-end; padding: 26px;
+      }
+      .lens .label { font-size: 12px; letter-spacing: 2px; font-weight: 700; text-shadow: 0 1px 8px rgba(0,0,0,0.6); }
+    </style>
+  </head>
+  <body>
+    <div class="panel" data-molten-ignore>
+      <h3>Molten Glass Studio</h3>
+      <div class="sub">Drag the lens • refracts the real page</div>
+
+      <h4>Page background</h4>
+      <div class="thumbs" id="thumbs"></div>
+      <label class="file-btn">Load your own image…<input type="file" id="file" accept="image/*" /></label>
+
+      <h4>Lens</h4>
+      <div id="controls"></div>
+      <button id="recapture">Re-capture page</button>
+    </div>
+
+    <div class="lens"><span class="label">MOLTEN GLASS · DRAG ME</span></div>
+
+    <div class="content">
+      <section>
+        <h1>Scroll me.</h1>
+        <p>The glass panel is <b>fixed</b> in the middle of the screen. Everything in this column scrolls behind it — and the lens bends the real headings, paragraphs, and color blocks like liquid at its edges.</p>
+      </section>
+      <section>
+        <h2>Real DOM, refracted</h2>
+        <p>This isn't a fake pattern. molten-glass snapshots the actual page with html2canvas, uploads it as a WebGL texture, and offsets the sample by your scroll position. The center stays clear; the rim melts.</p>
+        <div class="swatches"><div class="s1"></div><div class="s2"></div><div class="s3"></div></div>
+      </section>
+      <section>
+        <h2>Text bends too</h2>
+        <p>Big type is the easiest way to see the refraction. As these lines pass under the lens, watch the letters stretch and pinch toward the curved edges while staying readable through the middle.</p>
+        <p>Because scrolling only changes a sample offset — not the snapshot — it stays smooth even on a long page.</p>
+      </section>
+      <section>
+        <h2>Color fields</h2>
+        <div class="swatches"><div class="s2"></div><div class="s3"></div><div class="s1"></div></div>
+        <p>Gradients make the melt and the specular rim pop. Tweak the sliders on the right to dial the look in.</p>
+      </section>
+      <section>
+        <h2>One more screen</h2>
+        <p>Keep scrolling to feed more content through the lens. If you change the DOM, call <code>glass.recapture()</code> to refresh the snapshot.</p>
+      </section>
+    </div>
+
+    <script type="module">
+      import { mount, DEFAULTS } from '../src/index.js';
+
+      // Capture mode is the default; hand it the global html2canvas the CDN loaded.
+      // draggable lets you move the lens around to refract different parts of the page.
+      const glass = mount('.lens', { html2canvas: window.html2canvas, draggable: true });
+      window.glass = glass;
+
+      // Snapshot once fonts/layout have settled.
+      window.addEventListener('load', () => glass.recapture());
+
+      /* ---- Page background images (generated on canvases, offline-safe) ---- */
+      function makeCanvas(draw) {
+        const c = document.createElement('canvas');
+        c.width = 2400; c.height = 1600;
+        draw(c.getContext('2d'), c.width, c.height);
+        return c.toDataURL();
+      }
+      const vignette = (ctx, w, h, strength = 0.5) => {
+        const g = ctx.createRadialGradient(w / 2, h / 2, Math.min(w, h) * 0.2, w / 2, h / 2, Math.max(w, h) * 0.72);
+        g.addColorStop(0, 'transparent');
+        g.addColorStop(1, `rgba(4,5,12,${strength})`);
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      };
+      const glow = (ctx, w, h, x, y, r, color, a) => {
+        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+        g.addColorStop(0, color); g.addColorStop(1, 'transparent');
+        ctx.globalAlpha = a; ctx.globalCompositeOperation = 'screen';
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+        ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+      };
+      const dotGrid = (ctx, w, h, step = 44, a = 0.10) => {
+        ctx.fillStyle = `rgba(255,255,255,${a})`;
+        for (let y = step; y < h; y += step) for (let x = step; x < w; x += step) {
+          ctx.beginPath(); ctx.arc(x, y, 1.7, 0, 6.283); ctx.fill();
+        }
+      };
+      const diagonals = (ctx, w, h, gap = 26, a = 0.09) => {
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 1.3;
+        for (let x = -h; x < w; x += gap) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x + h, h); ctx.stroke(); }
+      };
+      const crosshatch = (ctx, w, h, step = 50, a = 0.09) => {
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 1.2;
+        for (let x = step; x < w; x += step) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke(); }
+        for (let y = step; y < h; y += step) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke(); }
+      };
+      const waves = (ctx, w, h, gap = 36, a = 0.10) => {
+        ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 1.4;
+        for (let y = 0; y < h + gap; y += gap) {
+          ctx.beginPath();
+          for (let x = 0; x <= w; x += 8) {
+            const yy = y + Math.sin(x * 0.018) * 11;
+            x === 0 ? ctx.moveTo(x, yy) : ctx.lineTo(x, yy);
+          }
+          ctx.stroke();
+        }
+      };
+      const linearBg = (ctx, w, h, stops) => {
+        const g = ctx.createLinearGradient(0, 0, w, h);
+        stops.forEach(([o, c]) => g.addColorStop(o, c));
+        ctx.fillStyle = g; ctx.fillRect(0, 0, w, h);
+      };
+
+      // Muted duotone gradients, each with its own distinct, clearly-visible texture.
+      const backgrounds = {
+        Indigo: makeCanvas((ctx, w, h) => {          // dots
+          linearBg(ctx, w, h, [[0, '#1c1e33'], [0.55, '#2f3352'], [1, '#454b73']]);
+          glow(ctx, w, h, w * 0.22, h * 0.16, w * 0.55, '#9aa4c8', 0.35);
+          dotGrid(ctx, w, h);
+          vignette(ctx, w, h, 0.45);
+        }),
+        Teal: makeCanvas((ctx, w, h) => {            // diagonals
+          linearBg(ctx, w, h, [[0, '#0f2422'], [0.55, '#274f4a'], [1, '#3c726c']]);
+          glow(ctx, w, h, w * 0.8, h * 0.2, w * 0.55, '#8fc4bd', 0.32);
+          diagonals(ctx, w, h);
+          vignette(ctx, w, h, 0.42);
+        }),
+        Plum: makeCanvas((ctx, w, h) => {            // crosshatch grid
+          linearBg(ctx, w, h, [[0, '#241a33'], [0.5, '#4a3a5e'], [1, '#7a4a68']]);
+          glow(ctx, w, h, w * 0.72, h * 0.76, w * 0.55, '#c9a6c4', 0.32);
+          crosshatch(ctx, w, h);
+          vignette(ctx, w, h, 0.45);
+        }),
+        Amber: makeCanvas((ctx, w, h) => {           // waves
+          linearBg(ctx, w, h, [[0, '#2b1c12'], [0.5, '#6b4a2c'], [1, '#b08046']]);
+          glow(ctx, w, h, w * 0.3, h * 0.82, w * 0.55, '#e8d3a8', 0.32);
+          waves(ctx, w, h);
+          vignette(ctx, w, h, 0.5);
+        }),
+      };
+
+      function setBackground(url) {
+        Object.assign(document.body.style, {
+          backgroundImage: `url("${url}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+        });
+        // Let the new background paint, then re-snapshot so the lens refracts it.
+        requestAnimationFrame(() => requestAnimationFrame(() => glass.recapture()));
+      }
+
+      // Each theme is a curated trio of harmonious (not same-hue) accent colours.
+      const shade = (hex, f) => {
+        const n = parseInt(hex.slice(1), 16);
+        const r = Math.round(((n >> 16) & 255) * f);
+        const g = Math.round(((n >> 8) & 255) * f);
+        const b = Math.round((n & 255) * f);
+        return `#${((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1)}`;
+      };
+      const swatchThemes = {
+        Indigo: ['#5c6bc0', '#4fa2a6', '#c78aa2'], // indigo · teal · dusty rose
+        Teal: ['#2f9188', '#7cb890', '#d8b46a'],   // teal · sage · soft gold
+        Plum: ['#8a6aa8', '#c47f9c', '#df9c74'],   // violet · rose · coral
+        Amber: ['#c58a4a', '#a89a6e', '#6f9f8c'],  // amber · taupe · sage
+      };
+      const applySwatches = (name) => {
+        const sw = swatchThemes[name] || swatchThemes.Indigo;
+        document.querySelectorAll('.swatches div').forEach((d, i) => {
+          const c = sw[i % 3];
+          d.style.background = `linear-gradient(135deg, ${c}, ${shade(c, 0.68)})`;
+        });
+      };
+
+      const thumbs = document.getElementById('thumbs');
+      Object.entries(backgrounds).forEach(([name, url]) => {
+        const b = document.createElement('button');
+        b.title = name;
+        b.style.backgroundImage = `url("${url}")`;
+        b.addEventListener('click', () => {
+          applySwatches(name);   // recolor the content boxes first, then recapture
+          setBackground(url);
+          [...thumbs.children].forEach((c) => c.classList.toggle('active', c === b));
+        });
+        thumbs.appendChild(b);
+      });
+
+      // Open on the first preset so the page looks intentional from the start.
+      const firstName = Object.keys(backgrounds)[0];
+      applySwatches(firstName);
+      Object.assign(document.body.style, {
+        backgroundImage: `url("${backgrounds[firstName]}")`, backgroundSize: 'cover', backgroundPosition: 'center',
+      });
+      thumbs.firstChild.classList.add('active');
+
+      document.getElementById('file').addEventListener('change', (e) => {
+        const f = e.target.files[0];
+        if (!f) return;
+        setBackground(URL.createObjectURL(f));
+        [...thumbs.children].forEach((c) => c.classList.remove('active'));
+      });
+
+      /* ---- Sliders: [option, min, max, step] ---- */
+      const sliders = [
+        ['twist', 0, 3, 0.05],
+        ['refraction', 0, 1, 0.02],
+        ['edgeExponent', 1, 8, 0.5],
+        ['specular', 0, 1, 0.05],
+        ['chromaticAberration', 0, 2, 0.05],
+        ['tintStrength', 0, 1, 0.02],
+        ['canvasBlur', 0, 20, 1],
+      ];
+      const controls = document.getElementById('controls');
+      sliders.forEach(([key, min, max, step]) => {
+        const row = document.createElement('div');
+        row.className = 'row';
+        row.innerHTML = `<label><span>${key}</span><span data-val>${DEFAULTS[key]}</span></label>
+          <input type="range" min="${min}" max="${max}" step="${step}" value="${DEFAULTS[key]}" />`;
+        const out = row.querySelector('[data-val]');
+        row.querySelector('input').addEventListener('input', (e) => {
+          const v = parseFloat(e.target.value);
+          out.textContent = v;
+          glass.set({ [key]: v });
+        });
+        controls.appendChild(row);
+      });
+
+      document.getElementById('recapture').addEventListener('click', () => glass.recapture());
+    </script>
+  </body>
+</html>
