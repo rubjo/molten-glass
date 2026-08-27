@@ -2,7 +2,7 @@
 
 Plug-and-play WebGL **molten / liquid glass** lens for any DOM element.
 
-**[▶ Live demo](https://<your-username>.github.io/molten-glass/examples/)**
+**[▶ Live demo](https://rubjo.github.io/molten-glass/examples/)**
 
 Point it at a selector and it becomes a fixed glass lens that refracts the **real
 page behind it** — background, headings, text, images, everything — bending it
